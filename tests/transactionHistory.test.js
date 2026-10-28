@@ -1,5 +1,6 @@
 const request = require('supertest');
 const app = require('../src/app');
+const { AUTH_HEADER } = require('./authHelper');
 
 describe('Transaction History API Endpoints', () => {
   let testAccountId;
@@ -8,10 +9,11 @@ describe('Transaction History API Endpoints', () => {
     // 1. Create account
     const accRes = await request(app)
       .post('/api/v1/accounts')
+      .set(AUTH_HEADER)
       .send({ name: 'History Test User' });
     testAccountId = accRes.body.data.id;
 
-    // 2. Populate transactions with sequential delays to ensure created_at ordering
+    // 2. Populate transactions
     const transactionsToSeed = [
       { type: 'credit', amount: 100, reference_id: 'seed-1', description: 'Initial seed' },
       { type: 'credit', amount: 50, reference_id: 'seed-2', description: 'Second credit' },
@@ -23,6 +25,7 @@ describe('Transaction History API Endpoints', () => {
     for (const tx of transactionsToSeed) {
       await request(app)
         .post(`/api/v1/accounts/${testAccountId}/transactions`)
+        .set(AUTH_HEADER)
         .send(tx);
     }
   });
@@ -30,7 +33,8 @@ describe('Transaction History API Endpoints', () => {
   describe('GET /api/v1/accounts/:accountId/transactions - History', () => {
     it('should return all transactions sorted latest-first when no filter provided', async () => {
       const res = await request(app)
-        .get(`/api/v1/accounts/${testAccountId}/transactions`);
+        .get(`/api/v1/accounts/${testAccountId}/transactions`)
+        .set(AUTH_HEADER);
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -44,11 +48,10 @@ describe('Transaction History API Endpoints', () => {
         total_pages: 1,
       });
 
-      // Verify latest-first ordering (seed-5 was created last, so it should be first)
+      // Verify latest-first ordering
       expect(res.body.data[0].reference_id).toBe('seed-5');
       expect(res.body.data[4].reference_id).toBe('seed-1');
 
-      // Verify each item contains required fields
       for (const item of res.body.data) {
         expect(item).toHaveProperty('id');
         expect(item).toHaveProperty('account_id', testAccountId);
@@ -62,7 +65,8 @@ describe('Transaction History API Endpoints', () => {
 
     it('should filter transactions by credit type', async () => {
       const res = await request(app)
-        .get(`/api/v1/accounts/${testAccountId}/transactions?type=credit`);
+        .get(`/api/v1/accounts/${testAccountId}/transactions?type=credit`)
+        .set(AUTH_HEADER);
 
       expect(res.status).toBe(200);
       expect(res.body.data.length).toBe(3);
@@ -70,13 +74,13 @@ describe('Transaction History API Endpoints', () => {
       res.body.data.forEach((tx) => {
         expect(tx.type).toBe('credit');
       });
-      // Latest credit was seed-4
       expect(res.body.data[0].reference_id).toBe('seed-4');
     });
 
     it('should filter transactions by debit type', async () => {
       const res = await request(app)
-        .get(`/api/v1/accounts/${testAccountId}/transactions?type=debit`);
+        .get(`/api/v1/accounts/${testAccountId}/transactions?type=debit`)
+        .set(AUTH_HEADER);
 
       expect(res.status).toBe(200);
       expect(res.body.data.length).toBe(2);
@@ -84,7 +88,6 @@ describe('Transaction History API Endpoints', () => {
       res.body.data.forEach((tx) => {
         expect(tx.type).toBe('debit');
       });
-      // Latest debit was seed-5
       expect(res.body.data[0].reference_id).toBe('seed-5');
       expect(res.body.data[1].reference_id).toBe('seed-3');
     });
@@ -92,7 +95,8 @@ describe('Transaction History API Endpoints', () => {
     it('should support pagination (page and limit)', async () => {
       // Page 1, limit 2
       const page1Res = await request(app)
-        .get(`/api/v1/accounts/${testAccountId}/transactions?page=1&limit=2`);
+        .get(`/api/v1/accounts/${testAccountId}/transactions?page=1&limit=2`)
+        .set(AUTH_HEADER);
 
       expect(page1Res.status).toBe(200);
       expect(page1Res.body.data.length).toBe(2);
@@ -107,7 +111,8 @@ describe('Transaction History API Endpoints', () => {
 
       // Page 2, limit 2
       const page2Res = await request(app)
-        .get(`/api/v1/accounts/${testAccountId}/transactions?page=2&limit=2`);
+        .get(`/api/v1/accounts/${testAccountId}/transactions?page=2&limit=2`)
+        .set(AUTH_HEADER);
 
       expect(page2Res.status).toBe(200);
       expect(page2Res.body.data.length).toBe(2);
@@ -117,7 +122,8 @@ describe('Transaction History API Endpoints', () => {
 
       // Page 3, limit 2 (last remaining record)
       const page3Res = await request(app)
-        .get(`/api/v1/accounts/${testAccountId}/transactions?page=3&limit=2`);
+        .get(`/api/v1/accounts/${testAccountId}/transactions?page=3&limit=2`)
+        .set(AUTH_HEADER);
 
       expect(page3Res.status).toBe(200);
       expect(page3Res.body.data.length).toBe(1);
@@ -127,7 +133,8 @@ describe('Transaction History API Endpoints', () => {
 
     it('should return 404 for non-existent account', async () => {
       const res = await request(app)
-        .get('/api/v1/accounts/non-existent-acc/transactions');
+        .get('/api/v1/accounts/non-existent-acc/transactions')
+        .set(AUTH_HEADER);
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('ACCOUNT_NOT_FOUND');
@@ -135,7 +142,8 @@ describe('Transaction History API Endpoints', () => {
 
     it('should reject invalid pagination parameters', async () => {
       const res = await request(app)
-        .get(`/api/v1/accounts/${testAccountId}/transactions?page=0`);
+        .get(`/api/v1/accounts/${testAccountId}/transactions?page=0`)
+        .set(AUTH_HEADER);
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_ERROR');

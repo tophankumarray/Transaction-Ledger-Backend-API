@@ -9,3 +9,4 @@ class InsufficientBalanceError extends AppError {
 }
 
 module.exports = InsufficientBalanceError;
+

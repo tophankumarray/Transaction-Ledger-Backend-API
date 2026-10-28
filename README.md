@@ -1,40 +1,79 @@
 # Transaction Ledger Backend API
 
-A production-grade, highly reliable Transaction Ledger Backend API built with **Node.js**, **Express.js**, and **MongoDB (Mongoose)**. The system models a double-entry style financial transaction ledger supporting account creation, credit/debit operations, transaction histories with pagination and filtering, strict immutability, ACID atomicity, race-condition safety, and peer-to-peer money transfers.
+A production-grade, highly reliable Transaction Ledger Backend API built with **Node.js**, **Express.js**, and **MongoDB (Mongoose)**. The system models a double-entry style financial transaction ledger supporting authenticated access, account creation, credit/debit operations, transaction histories with pagination and filtering, strict immutability, ACID atomicity, race-condition safety, and peer-to-peer money transfers.
 
 ---
 
 ## Table of Contents
 1. [Core Features & Architecture](#core-features--architecture)
-2. [Data Integrity & Concurrency Guarantees](#data-integrity--concurrency-guarantees)
-3. [Tech Stack](#tech-stack)
-4. [Project Structure](#project-structure)
-5. [Prerequisites & Getting Started](#prerequisites--getting-started)
+2. [Authentication & Protected Routes](#authentication--protected-routes)
+3. [Data Integrity & Concurrency Guarantees](#data-integrity--concurrency-guarantees)
+4. [Tech Stack](#tech-stack)
+5. [Project Structure](#project-structure)
+6. [Prerequisites & Getting Started](#prerequisites--getting-started)
    - [Option A: Zero-Setup In-Memory Mode (Recommended for testing/evaluation)](#option-a-zero-setup-in-memory-mode)
    - [Option B: Local MongoDB](#option-b-local-mongodb)
    - [Option C: Docker Compose](#option-c-docker-compose)
-6. [API Documentation](#api-documentation)
-   - [1. Create Account](#1-create-account)
-   - [2. Get Account Balance](#2-get-account-balance)
-   - [3. Get Account Details](#3-get-account-details)
-   - [4. Add Transaction (Credit / Debit)](#4-add-transaction)
-   - [5. Get Transaction History (Pagination & Filter)](#5-get-transaction-history)
-   - [6. Bonus: Money Transfer](#6-bonus-money-transfer)
-   - [7. Health Check](#7-health-check)
-7. [Automated Testing & Coverage](#automated-testing--coverage)
-8. [Postman Collection](#postman-collection)
+7. [API Documentation](#api-documentation)
+   - [Authentication Endpoints (Public)](#authentication-endpoints)
+     - [Register User](#register-user)
+     - [Login User](#login-user)
+     - [Get Current User Profile (Protected)](#get-current-user-profile)
+   - [Protected Ledger Endpoints](#protected-ledger-endpoints)
+     - [1. Create Account](#1-create-account)
+     - [2. Get Account Balance](#2-get-account-balance)
+     - [3. Get Account Details](#3-get-account-details)
+     - [4. Add Transaction (Credit / Debit)](#4-add-transaction)
+     - [5. Get Transaction History (Pagination & Filter)](#5-get-transaction-history)
+     - [6. Bonus: Money Transfer](#6-bonus-money-transfer)
+     - [7. Health Check (Public)](#7-health-check)
+8. [Automated Testing & Coverage](#automated-testing--coverage)
+9. [Postman Collection](#postman-collection)
 
 ---
 
 ## Core Features & Architecture
 
 - **Clean Layered Architecture**: Clear separation of concerns into Controllers, Services, Models, Middlewares, Validators, and Utilities.
+- **Dual Authentication & Protected Routes**: Protects all core financial ledger operations (`/accounts`, `/transactions`, `/transfers`) using either **JWT Bearer Tokens** (`Authorization: Bearer <token>`) or **API Keys** (`x-api-key: <key>`).
 - **Strict Atomicity & ACID Guarantees**: Balance updates and ledger entries are executed inside MongoDB session transactions with snapshot read concern and majority write concern.
 - **Idempotency & Duplicate Prevention**: Compound unique indexes on `(account_id, reference_id)` prevent duplicate transactions within an account, while allowing the same reference across different accounts.
 - **Transaction Immutability**: Enforced both at API route level (no PUT/PATCH/DELETE endpoints) and database schema level (Mongoose pre-hooks abort any update or deletion attempt).
 - **Exact Monetary Precision**: All arithmetic uses currency-safe utility helpers to prevent IEEE 754 floating-point errors (e.g. `0.1 + 0.2 = 0.30000000000000004`).
 - **Comprehensive Input Validation**: Request schemas validated strictly using **Zod**.
-- **Centralized Error Handling**: Standardized JSON error responses with clear HTTP status codes (200, 201, 400, 404, 409, 500).
+- **Centralized Error Handling**: Standardized JSON error responses with clear HTTP status codes (200, 201, 400, 401, 403, 404, 409, 500).
+
+---
+
+## Authentication & Protected Routes
+
+All core ledger endpoints under `/api/v1/accounts`, `/api/v1/transactions`, and `/api/v1/transfers` are **protected**.
+
+### How to Authenticate Requests:
+Clients can authenticate using either of the following methods:
+
+1. **JWT Bearer Token** (Standard for users/frontends):
+   Pass the JWT received from `/auth/login` or `/auth/register` in the `Authorization` header:
+   ```http
+   Authorization: Bearer <jwt_token>
+   ```
+
+2. **API Key** (Standard for machine-to-machine / automated systems):
+   Pass the configured API key in the `x-api-key` header:
+   ```http
+   x-api-key: ledger-api-key-secret-2026
+   ```
+
+If a client attempts to access a protected route without authentication or with an invalid token, the API responds with `401 Unauthorized`:
+```json
+{
+  "success": false,
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Authentication required. Please provide a Bearer token in Authorization header or a valid x-api-key."
+  }
+}
+```
 
 ---
 
@@ -72,68 +111,11 @@ Submitting a transaction with the same `reference_id` for the same account retur
 - **Runtime**: Node.js (v18+)
 - **Framework**: Express.js
 - **Database**: MongoDB with Mongoose ODM
+- **Authentication**: JWT (`jsonwebtoken`) & `bcryptjs`
 - **Validation**: Zod
 - **Security**: Helmet, CORS
 - **Logging**: Morgan
 - **Testing**: Jest, Supertest, MongoDB-Memory-Server
-
----
-
-## Project Structure
-
-```
-├── src/
-│   ├── app.js                   # Express application setup
-│   ├── server.js                # Server entry point & graceful shutdown
-│   ├── config/
-│   │   ├── database.js          # MongoDB connection & transaction runner
-│   │   └── env.js               # Environment variables configuration
-│   ├── constants/
-│   │   └── transactionTypes.js  # Transaction types & error code definitions
-│   ├── controllers/
-│   │   ├── accountController.js # Account endpoints handler
-│   │   ├── transactionController.js # Transaction & history handler
-│   │   └── transferController.js    # Bonus transfer handler
-│   ├── errors/                  # Custom error hierarchy (AppError, NotFound, etc.)
-│   ├── middlewares/
-│   │   ├── errorHandler.js      # Global centralized error handler
-│   │   ├── notFoundHandler.js   # 404 route handler
-│   │   └── validate.js          # Zod schema validation middleware
-│   ├── models/
-│   │   ├── Account.js           # Account schema
-│   │   ├── Transaction.js       # Transaction schema with constraints & immutability
-│   │   └── Transfer.js          # Bonus Transfer schema
-│   ├── routes/
-│   │   ├── accountRoutes.js     # /api/v1/accounts
-│   │   ├── transactionRoutes.js # /api/v1/transactions
-│   │   ├── transferRoutes.js    # /api/v1/transfers
-│   │   └── index.js             # Route aggregator & health check
-│   ├── services/
-│   │   ├── accountService.js    # Account business logic
-│   │   ├── transactionService.js# Atomic transactions & history retrieval
-│   │   └── transferService.js   # Atomic money transfer logic
-│   ├── utils/
-│   │   ├── asyncHandler.js      # Async handler wrapper
-│   │   ├── math.js              # Currency rounding & arithmetic
-│   │   └── responseFormatter.js # Standardized JSON formatters
-│   └── validators/
-│       ├── accountValidator.js
-│       ├── transactionValidator.js
-│       └── transferValidator.js
-├── tests/                       # Complete automated Jest test suite
-│   ├── accounts.test.js
-│   ├── dataIntegrity.test.js
-│   ├── health.test.js
-│   ├── setup.js
-│   ├── transactionHistory.test.js
-│   ├── transactions.test.js
-│   └── transfers.test.js
-├── docker-compose.yml
-├── Dockerfile
-├── package.json
-├── postman_collection.json
-└── README.md
-```
 
 ---
 
@@ -146,8 +128,6 @@ Submitting a transaction with the same `reference_id` for the same account retur
 ### Installation
 Clone the repository and install dependencies:
 ```bash
-git clone <repository_url>
-cd "Transaction Backend API"
 npm install
 ```
 
@@ -160,13 +140,7 @@ npm install
    ```bash
    cp .env.example .env
    ```
-2. Set `USE_IN_MEMORY_DB=true` in `.env`:
-   ```env
-   PORT=3000
-   NODE_ENV=development
-   USE_IN_MEMORY_DB=true
-   ```
-3. Start the application:
+2. Start the application:
    ```bash
    npm start
    # or for development with auto-reload:
@@ -176,19 +150,11 @@ npm install
 ---
 
 ### Option B: Local MongoDB
-If you have MongoDB running locally on port 27017:
-1. Ensure MongoDB service is running:
+1. Ensure MongoDB service is running locally on port 27017:
    ```bash
    mongod --dbpath /data/db
    ```
-2. Configure `.env`:
-   ```env
-   PORT=3000
-   NODE_ENV=development
-   MONGODB_URI=mongodb://localhost:27017/transaction_ledger
-   USE_IN_MEMORY_DB=false
-   ```
-3. Start the application:
+2. Start the application:
    ```bash
    npm start
    ```
@@ -196,7 +162,6 @@ If you have MongoDB running locally on port 27017:
 ---
 
 ### Option C: Docker Compose
-Run the entire stack (API server + MongoDB container) with one command:
 ```bash
 docker-compose up --build
 ```
@@ -208,35 +173,89 @@ The API will be available at `http://localhost:3000`.
 
 All API endpoints are prefixed with `/api/v1`.
 
-### Response Structure
-**Success:**
-```json
-{
-  "success": true,
-  "message": "Success message",
-  "data": { ... },
-  "meta": { ... } // optional pagination or metadata
-}
-```
+---
 
-**Error:**
-```json
-{
-  "success": false,
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "Human-readable error description",
-    "details": [ ... ] // optional validation details
+### Authentication Endpoints
+
+#### Register User
+- **URL**: `POST /api/v1/auth/register` (Public)
+- **Request Body**:
+  ```json
+  {
+    "username": "alice_ledger",
+    "email": "alice@example.com",
+    "password": "securePassword123"
   }
-}
-```
+  ```
+- **Response** (`201 Created`):
+  ```json
+  {
+    "success": true,
+    "message": "User registered successfully",
+    "data": {
+      "user": {
+        "id": "c138988c-90b5-4b13-a41e-5be746ff585f",
+        "username": "alice_ledger",
+        "email": "alice@example.com",
+        "role": "user",
+        "created_at": "2026-10-28T21:40:00.000Z"
+      },
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    }
+  }
+  ```
+
+#### Login User
+- **URL**: `POST /api/v1/auth/login` (Public)
+- **Request Body**:
+  ```json
+  {
+    "email": "alice@example.com",
+    "password": "securePassword123"
+  }
+  ```
+- **Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "message": "Login successful",
+    "data": {
+      "user": {
+        "id": "c138988c-90b5-4b13-a41e-5be746ff585f",
+        "username": "alice_ledger",
+        "email": "alice@example.com",
+        "role": "user"
+      },
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    }
+  }
+  ```
+
+#### Get Current User Profile
+- **URL**: `GET /api/v1/auth/me` (Protected - Requires Bearer token)
+- **Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "message": "Current user profile retrieved",
+    "data": {
+      "id": "c138988c-90b5-4b13-a41e-5be746ff585f",
+      "username": "alice_ledger",
+      "email": "alice@example.com",
+      "role": "user"
+    }
+  }
+  ```
 
 ---
 
-### 1. Create Account
+### Protected Ledger Endpoints
+
+#### 1. Create Account
 Creates a new account. Initial balance is always `0`. Setting initial balance is rejected.
 
-- **URL**: `POST /api/v1/accounts`
+- **URL**: `POST /api/v1/accounts` (Protected)
+- **Headers**: `Authorization: Bearer <token>` or `x-api-key: ledger-api-key-secret-2026`
 - **Request Body**:
   ```json
   {
@@ -260,15 +279,16 @@ Creates a new account. Initial balance is always `0`. Setting initial balance is
   ```bash
   curl -X POST http://localhost:3000/api/v1/accounts \
     -H "Content-Type: application/json" \
+    -H "Authorization: Bearer <your_jwt_token>" \
     -d '{"name": "Alice Smith"}'
   ```
 
 ---
 
-### 2. Get Account Balance
+#### 2. Get Account Balance
 Retrieves the current balance for an existing account.
 
-- **URL**: `GET /api/v1/accounts/:accountId/balance`
+- **URL**: `GET /api/v1/accounts/:accountId/balance` (Protected)
 - **Response** (`200 OK`):
   ```json
   {
@@ -280,27 +300,11 @@ Retrieves the current balance for an existing account.
     }
   }
   ```
-- **Error Response** (`404 Not Found`):
-  ```json
-  {
-    "success": false,
-    "error": {
-      "code": "ACCOUNT_NOT_FOUND",
-      "message": "Account with ID 'unknown-id' was not found"
-    }
-  }
-  ```
-- **Example cURL**:
-  ```bash
-  curl http://localhost:3000/api/v1/accounts/e45bdf4b-6147-4fbb-9177-0a256911c79e/balance
-  ```
 
 ---
 
-### 3. Get Account Details
-Retrieves full details of an account.
-
-- **URL**: `GET /api/v1/accounts/:accountId`
+#### 3. Get Account Details
+- **URL**: `GET /api/v1/accounts/:accountId` (Protected)
 - **Response** (`200 OK`):
   ```json
   {
@@ -317,11 +321,10 @@ Retrieves full details of an account.
 
 ---
 
-### 4. Add Transaction
-Applies a `credit` or `debit` transaction to an account.
+#### 4. Add Transaction
+Applies a `credit` or `debit` transaction to an account atomically.
 
-- **URL**: `POST /api/v1/accounts/:accountId/transactions`
-  *(Also supports direct `POST /api/v1/transactions` with `account_id` in request body)*
+- **URL**: `POST /api/v1/accounts/:accountId/transactions` (Protected)
 - **Request Body**:
   ```json
   {
@@ -350,54 +353,17 @@ Applies a `credit` or `debit` transaction to an account.
     }
   }
   ```
-- **Debit with Insufficient Balance** (`400 Bad Request`):
-  ```json
-  {
-    "success": false,
-    "error": {
-      "code": "INSUFFICIENT_BALANCE",
-      "message": "Insufficient balance for debit. Current balance is 100.00, requested debit is 150.00",
-      "details": {
-        "current_balance": 100.00,
-        "requested_amount": 150.00
-      }
-    }
-  }
-  ```
-- **Duplicate Reference ID** (`409 Conflict`):
-  ```json
-  {
-    "success": false,
-    "error": {
-      "code": "DUPLICATE_TRANSACTION_REFERENCE",
-      "message": "A transaction with reference_id 'tx-salary-oct-2026' already exists for account 'e45bdf4b-6147-4fbb-9177-0a256911c79e'. Account balance unchanged."
-    }
-  }
-  ```
-- **Example cURL**:
-  ```bash
-  curl -X POST http://localhost:3000/api/v1/accounts/e45bdf4b-6147-4fbb-9177-0a256911c79e/transactions \
-    -H "Content-Type: application/json" \
-    -d '{
-      "type": "credit",
-      "amount": 100,
-      "description": "Initial credit",
-      "reference_id": "ref-001"
-    }'
-  ```
 
 ---
 
-### 5. Get Transaction History
+#### 5. Get Transaction History
 Retrieves transactions for an account with sorting (latest-first), filtering, and pagination.
 
-- **URL**: `GET /api/v1/accounts/:accountId/transactions`
+- **URL**: `GET /api/v1/accounts/:accountId/transactions` (Protected)
 - **Query Parameters**:
-  | Parameter | Type | Required | Default | Description |
-  |-----------|------|----------|---------|-------------|
-  | `type` | string | No | `all` | Filter by `credit` or `debit` |
-  | `page` | integer | No | `1` | Page number (min 1) |
-  | `limit` | integer | No | `10` | Records per page (min 1, max 100) |
+  - `type`: `credit` | `debit` (optional)
+  - `page`: default 1
+  - `limit`: default 10 (max 100)
 - **Response** (`200 OK`):
   ```json
   {
@@ -412,39 +378,23 @@ Retrieves transactions for an account with sorting (latest-first), filtering, an
         "description": "Groceries",
         "reference_id": "ref-002",
         "created_at": "2026-10-28T21:10:00.000Z"
-      },
-      {
-        "id": "a93e3e0d-1e1b-4fbf-9311-bfad4b302c11",
-        "account_id": "e45bdf4b-6147-4fbb-9177-0a256911c79e",
-        "type": "credit",
-        "amount": 100.00,
-        "description": "Initial credit",
-        "reference_id": "ref-001",
-        "created_at": "2026-10-28T21:05:00.000Z"
       }
     ],
     "meta": {
       "current_page": 1,
       "page_size": 10,
-      "total_records": 2,
+      "total_records": 1,
       "total_pages": 1
     }
   }
   ```
-- **Example cURL (Credit transactions on page 1)**:
-  ```bash
-  curl "http://localhost:3000/api/v1/accounts/e45bdf4b-6147-4fbb-9177-0a256911c79e/transactions?type=credit&page=1&limit=5"
-  ```
 
 ---
 
-### 6. Bonus: Money Transfer
+#### 6. Bonus: Money Transfer
 Atomically transfers funds from a source account to a destination account.
-- Creates a Debit transaction on the source account and a Credit transaction on the destination account.
-- Debiting source and crediting destination are wrapped in an atomic MongoDB transaction.
-- If source has insufficient balance or either account does not exist, the entire transfer is rolled back.
 
-- **URL**: `POST /api/v1/transfers`
+- **URL**: `POST /api/v1/transfers` (Protected)
 - **Request Body**:
   ```json
   {
@@ -466,30 +416,18 @@ Atomically transfers funds from a source account to a destination account.
         "source_account_id": "e45bdf4b-6147-4fbb-9177-0a256911c79e",
         "destination_account_id": "b901a182-38d1-4ee1-b703-91ca5b430881",
         "amount": 30.00,
-        "description": "Rent contribution",
-        "reference_id": "transfer-oct-01",
-        "source_transaction_id": "31bb18b9-e152-47ec-a232-a5416b2e3c04",
-        "destination_transaction_id": "f5195eb4-3c25-4b08-8e65-27a3f443c2c1",
-        "created_at": "2026-10-28T21:15:00.000Z"
+        "reference_id": "transfer-oct-01"
       },
-      "source_account": {
-        "id": "e45bdf4b-6147-4fbb-9177-0a256911c79e",
-        "previous_balance": 100.00,
-        "new_balance": 70.00
-      },
-      "destination_account": {
-        "id": "b901a182-38d1-4ee1-b703-91ca5b430881",
-        "previous_balance": 50.00,
-        "new_balance": 80.00
-      }
+      "source_account": { "id": "...", "new_balance": 70.00 },
+      "destination_account": { "id": "...", "new_balance": 80.00 }
     }
   }
   ```
 
 ---
 
-### 7. Health Check
-- **URL**: `GET /api/v1/health`
+#### 7. Health Check
+- **URL**: `GET /api/v1/health` (Public)
 - **Response** (`200 OK`):
   ```json
   {
@@ -504,9 +442,7 @@ Atomically transfers funds from a source account to a destination account.
 
 ## Automated Testing & Coverage
 
-The test suite contains **36 automated unit and integration tests** verifying all requirements, edge cases, error codes, and concurrency rules.
-
-Tests run against an isolated **in-memory MongoDB ReplicaSet** (`mongodb-memory-server`), ensuring zero external setup is required.
+The test suite contains **49 automated unit and integration tests** verifying authentication, error responses, ACID atomicity, and edge cases:
 
 Run the test suite:
 ```bash
@@ -518,8 +454,9 @@ Run tests with code coverage analysis:
 npm run test:coverage
 ```
 
-### Test Suite Summary:
-- `tests/accounts.test.js`: Account creation, validation, balance queries, client-set balance rejection.
+### Test Suite Overview:
+- `tests/auth.test.js`: User registration, duplicate checks, login, JWT issuance, password verification, 401 unauthenticated protection, and API key auth.
+- `tests/accounts.test.js`: Account creation, balance queries, client-set balance rejection.
 - `tests/transactions.test.js`: Credit, debit, overdraft checks, idempotency, cross-account references, decimal validation.
 - `tests/transactionHistory.test.js`: Filtering, pagination, sorting (latest first), not-found behavior.
 - `tests/dataIntegrity.test.js`: Multi-step consistency example (`0 + 100 + 50 - 30 - 20 = 100`), transaction immutability hooks.
@@ -530,10 +467,10 @@ npm run test:coverage
 
 ## Postman Collection
 
-A pre-configured Postman Collection is provided in the repository root:
-`postman_collection.json`
+A pre-configured Postman Collection is located at the root of the project:
+[`postman_collection.json`](postman_collection.json)
 
 ### To use:
 1. Open Postman.
 2. Click **Import** -> Select `postman_collection.json`.
-3. The collection includes environment variables (`baseUrl`, `accountId`, `accountBId`) and automatically captures generated account IDs between test steps.
+3. The collection automatically captures the JWT token from `Auth - 1. Register User` or `Auth - 2. Login User` and automatically injects it into all subsequent protected ledger requests!

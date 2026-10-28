@@ -107,3 +107,4 @@ transactionSchema.set('toObject', {
 const Transaction = mongoose.model('Transaction', transactionSchema);
 
 module.exports = Transaction;
+

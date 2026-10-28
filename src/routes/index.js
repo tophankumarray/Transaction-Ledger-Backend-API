@@ -1,12 +1,14 @@
 const express = require('express');
+const authRoutes = require('./authRoutes');
 const accountRoutes = require('./accountRoutes');
 const transactionRoutes = require('./transactionRoutes');
 const transferRoutes = require('./transferRoutes');
+const { authenticate } = require('../middlewares/authMiddleware');
 const { isTransactionsSupported } = require('../config/database');
 
 const router = express.Router();
 
-// Health Check Endpoint
+// 1. Public Health Check Endpoint
 router.get('/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',
@@ -16,9 +18,12 @@ router.get('/health', (req, res) => {
   });
 });
 
-// Resource Routers
-router.use('/accounts', accountRoutes);
-router.use('/transactions', transactionRoutes);
-router.use('/transfers', transferRoutes);
+// 2. Public Authentication Endpoints (/register, /login)
+router.use('/auth', authRoutes);
+
+// 3. Protected Ledger Endpoints (Protected by authenticate middleware)
+router.use('/accounts', authenticate, accountRoutes);
+router.use('/transactions', authenticate, transactionRoutes);
+router.use('/transfers', authenticate, transferRoutes);
 
 module.exports = router;

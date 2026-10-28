@@ -8,3 +8,4 @@ class NotFoundError extends AppError {
 }
 
 module.exports = NotFoundError;
+

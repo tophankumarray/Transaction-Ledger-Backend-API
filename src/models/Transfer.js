@@ -78,3 +78,4 @@ transferSchema.set('toJSON', {
 const Transfer = mongoose.model('Transfer', transferSchema);
 
 module.exports = Transfer;
+

@@ -1,11 +1,13 @@
 const request = require('supertest');
 const app = require('../src/app');
+const { AUTH_HEADER } = require('./authHelper');
 
 describe('Account API Endpoints', () => {
   describe('POST /api/v1/accounts - Create Account', () => {
     it('should successfully create an account with balance 0 and system generated id and created_at', async () => {
       const res = await request(app)
         .post('/api/v1/accounts')
+        .set(AUTH_HEADER)
         .send({ name: 'Alice Smith' });
 
       expect(res.status).toBe(201);
@@ -20,6 +22,7 @@ describe('Account API Endpoints', () => {
     it('should reject creation if name is missing', async () => {
       const res = await request(app)
         .post('/api/v1/accounts')
+        .set(AUTH_HEADER)
         .send({});
 
       expect(res.status).toBe(400);
@@ -30,6 +33,7 @@ describe('Account API Endpoints', () => {
     it('should reject creation if name is empty or only whitespace', async () => {
       const res = await request(app)
         .post('/api/v1/accounts')
+        .set(AUTH_HEADER)
         .send({ name: '   ' });
 
       expect(res.status).toBe(400);
@@ -40,6 +44,7 @@ describe('Account API Endpoints', () => {
     it('should reject creation if client attempts to provide initial balance', async () => {
       const res = await request(app)
         .post('/api/v1/accounts')
+        .set(AUTH_HEADER)
         .send({ name: 'Bob Jones', balance: 500 });
 
       expect(res.status).toBe(400);
@@ -53,13 +58,15 @@ describe('Account API Endpoints', () => {
       // First create account
       const createRes = await request(app)
         .post('/api/v1/accounts')
+        .set(AUTH_HEADER)
         .send({ name: 'Charlie Brown' });
 
       const accountId = createRes.body.data.id;
 
       // Fetch balance
       const balanceRes = await request(app)
-        .get(`/api/v1/accounts/${accountId}/balance`);
+        .get(`/api/v1/accounts/${accountId}/balance`)
+        .set(AUTH_HEADER);
 
       expect(balanceRes.status).toBe(200);
       expect(balanceRes.body.success).toBe(true);
@@ -72,7 +79,8 @@ describe('Account API Endpoints', () => {
     it('should return 404 when querying balance for non-existent account', async () => {
       const nonExistentId = 'non-existent-account-id';
       const res = await request(app)
-        .get(`/api/v1/accounts/${nonExistentId}/balance`);
+        .get(`/api/v1/accounts/${nonExistentId}/balance`)
+        .set(AUTH_HEADER);
 
       expect(res.status).toBe(404);
       expect(res.body.success).toBe(false);
@@ -84,11 +92,15 @@ describe('Account API Endpoints', () => {
     it('should fetch full account details', async () => {
       const createRes = await request(app)
         .post('/api/v1/accounts')
+        .set(AUTH_HEADER)
         .send({ name: 'Diana Prince' });
 
       const accountId = createRes.body.data.id;
 
-      const res = await request(app).get(`/api/v1/accounts/${accountId}`);
+      const res = await request(app)
+        .get(`/api/v1/accounts/${accountId}`)
+        .set(AUTH_HEADER);
+
       expect(res.status).toBe(200);
       expect(res.body.data.id).toBe(accountId);
       expect(res.body.data.name).toBe('Diana Prince');
@@ -96,7 +108,10 @@ describe('Account API Endpoints', () => {
     });
 
     it('should return 404 for non-existent account', async () => {
-      const res = await request(app).get('/api/v1/accounts/invalid-uuid');
+      const res = await request(app)
+        .get('/api/v1/accounts/invalid-uuid')
+        .set(AUTH_HEADER);
+
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('ACCOUNT_NOT_FOUND');
     });

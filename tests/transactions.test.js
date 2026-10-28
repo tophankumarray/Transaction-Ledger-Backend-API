@@ -1,5 +1,6 @@
 const request = require('supertest');
 const app = require('../src/app');
+const { AUTH_HEADER } = require('./authHelper');
 
 describe('Transaction API Endpoints', () => {
   let testAccountId;
@@ -7,6 +8,7 @@ describe('Transaction API Endpoints', () => {
   beforeEach(async () => {
     const res = await request(app)
       .post('/api/v1/accounts')
+      .set(AUTH_HEADER)
       .send({ name: 'Transaction Test Account' });
     testAccountId = res.body.data.id;
   });
@@ -16,6 +18,7 @@ describe('Transaction API Endpoints', () => {
       // Credit 100
       const tx1 = await request(app)
         .post(`/api/v1/accounts/${testAccountId}/transactions`)
+        .set(AUTH_HEADER)
         .send({
           type: 'credit',
           amount: 100,
@@ -36,12 +39,14 @@ describe('Transaction API Endpoints', () => {
 
       // Verify balance endpoint reflects new balance
       const balanceRes = await request(app)
-        .get(`/api/v1/accounts/${testAccountId}/balance`);
+        .get(`/api/v1/accounts/${testAccountId}/balance`)
+        .set(AUTH_HEADER);
       expect(balanceRes.body.data.balance).toBe(100);
 
       // Additional credit 50
       const tx2 = await request(app)
         .post(`/api/v1/accounts/${testAccountId}/transactions`)
+        .set(AUTH_HEADER)
         .send({
           type: 'credit',
           amount: 50,
@@ -53,7 +58,8 @@ describe('Transaction API Endpoints', () => {
       expect(tx2.body.meta.current_balance).toBe(150);
 
       const balanceRes2 = await request(app)
-        .get(`/api/v1/accounts/${testAccountId}/balance`);
+        .get(`/api/v1/accounts/${testAccountId}/balance`)
+        .set(AUTH_HEADER);
       expect(balanceRes2.body.data.balance).toBe(150);
     });
   });
@@ -63,6 +69,7 @@ describe('Transaction API Endpoints', () => {
       // Fund account with 100 first
       await request(app)
         .post(`/api/v1/accounts/${testAccountId}/transactions`)
+        .set(AUTH_HEADER)
         .send({
           type: 'credit',
           amount: 100,
@@ -74,6 +81,7 @@ describe('Transaction API Endpoints', () => {
       // Debit 30 from 100 -> New balance: 70
       const res = await request(app)
         .post(`/api/v1/accounts/${testAccountId}/transactions`)
+        .set(AUTH_HEADER)
         .send({
           type: 'debit',
           amount: 30,
@@ -93,7 +101,8 @@ describe('Transaction API Endpoints', () => {
 
       // Verify balance endpoint
       const balanceRes = await request(app)
-        .get(`/api/v1/accounts/${testAccountId}/balance`);
+        .get(`/api/v1/accounts/${testAccountId}/balance`)
+        .set(AUTH_HEADER);
       expect(balanceRes.body.data.balance).toBe(70);
     });
 
@@ -101,6 +110,7 @@ describe('Transaction API Endpoints', () => {
       // Current balance: 100. Attempt Debit: 150
       const res = await request(app)
         .post(`/api/v1/accounts/${testAccountId}/transactions`)
+        .set(AUTH_HEADER)
         .send({
           type: 'debit',
           amount: 150,
@@ -114,7 +124,8 @@ describe('Transaction API Endpoints', () => {
 
       // Balance must remain unchanged at 100
       const balanceRes = await request(app)
-        .get(`/api/v1/accounts/${testAccountId}/balance`);
+        .get(`/api/v1/accounts/${testAccountId}/balance`)
+        .set(AUTH_HEADER);
       expect(balanceRes.body.data.balance).toBe(100);
     });
   });
@@ -124,6 +135,7 @@ describe('Transaction API Endpoints', () => {
       // 1. Initial credit
       const initialTx = await request(app)
         .post(`/api/v1/accounts/${testAccountId}/transactions`)
+        .set(AUTH_HEADER)
         .send({
           type: 'credit',
           amount: 100,
@@ -135,6 +147,7 @@ describe('Transaction API Endpoints', () => {
       // 2. Submit same transaction with duplicate reference_id
       const duplicateTx = await request(app)
         .post(`/api/v1/accounts/${testAccountId}/transactions`)
+        .set(AUTH_HEADER)
         .send({
           type: 'credit',
           amount: 100,
@@ -148,7 +161,8 @@ describe('Transaction API Endpoints', () => {
 
       // 3. Balance must remain 100, NOT 200
       const balanceRes = await request(app)
-        .get(`/api/v1/accounts/${testAccountId}/balance`);
+        .get(`/api/v1/accounts/${testAccountId}/balance`)
+        .set(AUTH_HEADER);
       expect(balanceRes.body.data.balance).toBe(100);
     });
 
@@ -156,6 +170,7 @@ describe('Transaction API Endpoints', () => {
       // Create second account
       const acc2Res = await request(app)
         .post('/api/v1/accounts')
+        .set(AUTH_HEADER)
         .send({ name: 'Second Account' });
       const testAccountId2 = acc2Res.body.data.id;
 
@@ -164,6 +179,7 @@ describe('Transaction API Endpoints', () => {
       // First account uses sharedRefId
       const tx1 = await request(app)
         .post(`/api/v1/accounts/${testAccountId}/transactions`)
+        .set(AUTH_HEADER)
         .send({
           type: 'credit',
           amount: 50,
@@ -174,6 +190,7 @@ describe('Transaction API Endpoints', () => {
       // Second account uses same sharedRefId
       const tx2 = await request(app)
         .post(`/api/v1/accounts/${testAccountId2}/transactions`)
+        .set(AUTH_HEADER)
         .send({
           type: 'credit',
           amount: 80,
@@ -182,8 +199,12 @@ describe('Transaction API Endpoints', () => {
       expect(tx2.status).toBe(201);
 
       // Check balances
-      const bal1 = await request(app).get(`/api/v1/accounts/${testAccountId}/balance`);
-      const bal2 = await request(app).get(`/api/v1/accounts/${testAccountId2}/balance`);
+      const bal1 = await request(app)
+        .get(`/api/v1/accounts/${testAccountId}/balance`)
+        .set(AUTH_HEADER);
+      const bal2 = await request(app)
+        .get(`/api/v1/accounts/${testAccountId2}/balance`)
+        .set(AUTH_HEADER);
       expect(bal1.body.data.balance).toBe(50);
       expect(bal2.body.data.balance).toBe(80);
     });
@@ -193,6 +214,7 @@ describe('Transaction API Endpoints', () => {
     it('should return 404 if account does not exist', async () => {
       const res = await request(app)
         .post('/api/v1/accounts/non-existent-id/transactions')
+        .set(AUTH_HEADER)
         .send({
           type: 'credit',
           amount: 50,
@@ -206,6 +228,7 @@ describe('Transaction API Endpoints', () => {
     it('should reject invalid transaction type', async () => {
       const res = await request(app)
         .post(`/api/v1/accounts/${testAccountId}/transactions`)
+        .set(AUTH_HEADER)
         .send({
           type: 'invalid_type',
           amount: 50,
@@ -219,6 +242,7 @@ describe('Transaction API Endpoints', () => {
     it('should reject amount <= 0', async () => {
       const res1 = await request(app)
         .post(`/api/v1/accounts/${testAccountId}/transactions`)
+        .set(AUTH_HEADER)
         .send({
           type: 'credit',
           amount: 0,
@@ -228,6 +252,7 @@ describe('Transaction API Endpoints', () => {
 
       const res2 = await request(app)
         .post(`/api/v1/accounts/${testAccountId}/transactions`)
+        .set(AUTH_HEADER)
         .send({
           type: 'credit',
           amount: -25,
@@ -239,6 +264,7 @@ describe('Transaction API Endpoints', () => {
     it('should reject amount with more than 2 decimal places', async () => {
       const res = await request(app)
         .post(`/api/v1/accounts/${testAccountId}/transactions`)
+        .set(AUTH_HEADER)
         .send({
           type: 'credit',
           amount: 10.999,
@@ -252,6 +278,7 @@ describe('Transaction API Endpoints', () => {
     it('should reject missing reference_id', async () => {
       const res = await request(app)
         .post(`/api/v1/accounts/${testAccountId}/transactions`)
+        .set(AUTH_HEADER)
         .send({
           type: 'credit',
           amount: 10,
@@ -264,6 +291,7 @@ describe('Transaction API Endpoints', () => {
     it('should support direct POST /api/v1/transactions with account_id in body', async () => {
       const res = await request(app)
         .post('/api/v1/transactions')
+        .set(AUTH_HEADER)
         .send({
           account_id: testAccountId,
           type: 'credit',

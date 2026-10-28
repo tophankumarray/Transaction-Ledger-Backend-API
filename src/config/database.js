@@ -115,3 +115,4 @@ module.exports = {
   runInTransaction,
   isTransactionsSupported: () => supportsTransactions,
 };
+

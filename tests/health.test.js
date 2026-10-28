@@ -23,3 +23,4 @@ describe('Health and Root Endpoints', () => {
     expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
   });
 });
+
