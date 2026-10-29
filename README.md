@@ -6,14 +6,14 @@ A production-grade, highly reliable Transaction Ledger Backend API built with **
 
 ## Table of Contents
 1. [Core Features & Architecture](#core-features--architecture)
-2. [Authentication & Protected Routes](#authentication--protected-routes)
+2. [Interactive Swagger API Docs](#interactive-swagger-api-docs)
+3. [Authentication & Protected Routes](#authentication--protected-routes)
 3. [Data Integrity & Concurrency Guarantees](#data-integrity--concurrency-guarantees)
 4. [Tech Stack](#tech-stack)
 5. [Project Structure](#project-structure)
 6. [Prerequisites & Getting Started](#prerequisites--getting-started)
    - [Option A: Zero-Setup In-Memory Mode (Recommended for testing/evaluation)](#option-a-zero-setup-in-memory-mode)
    - [Option B: Local MongoDB](#option-b-local-mongodb)
-   - [Option C: Docker Compose](#option-c-docker-compose)
 7. [API Documentation](#api-documentation)
    - [Authentication Endpoints (Public)](#authentication-endpoints)
      - [Register User](#register-user)
@@ -26,7 +26,6 @@ A production-grade, highly reliable Transaction Ledger Backend API built with **
      - [4. Add Transaction (Credit / Debit)](#4-add-transaction)
      - [5. Get Transaction History (Pagination & Filter)](#5-get-transaction-history)
      - [6. Bonus: Money Transfer](#6-bonus-money-transfer)
-     - [7. Health Check (Public)](#7-health-check)
 8. [Automated Testing & Coverage](#automated-testing--coverage)
 9. [Postman Collection](#postman-collection)
 
@@ -45,7 +44,18 @@ A production-grade, highly reliable Transaction Ledger Backend API built with **
 
 ---
 
-## Authentication & Protected Routes
+## Interactive Swagger API Docs
+
+Once the server is running, you can test all endpoints interactively in your browser with **Swagger UI**:
+
+- **Swagger UI**: [http://localhost:5000/api-docs](http://localhost:5000/api-docs)
+- **OpenAPI 3.0 JSON Spec**: [http://localhost:5000/api-docs/swagger.json](http://localhost:5000/api-docs/swagger.json)
+
+Using the **Authorize** button in Swagger UI:
+- **BearerAuth**: Enter your JWT token (`eyJhbGciOi...`).
+- **ApiKeyAuth**: Enter your API key (`ledger-api-key-secret-2026`).
+
+---
 
 All core ledger endpoints under `/api/v1/accounts`, `/api/v1/transactions`, and `/api/v1/transfers` are **protected**.
 
@@ -136,10 +146,8 @@ npm install
 ### Option A: Zero-Setup In-Memory Mode
 > **Ideal for quick evaluation!** You do not need to install or run MongoDB. The server automatically starts an in-memory MongoDB ReplicaSet if local Mongo is unavailable or when `USE_IN_MEMORY_DB=true`.
 
-1. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
+1. Verify settings in `.env`:
+   Ensure `PORT=5000` and MongoDB connection details match your environment.
 2. Start the application:
    ```bash
    npm start
@@ -158,14 +166,6 @@ npm install
    ```bash
    npm start
    ```
-
----
-
-### Option C: Docker Compose
-```bash
-docker-compose up --build
-```
-The API will be available at `http://localhost:3000`.
 
 ---
 
@@ -277,7 +277,7 @@ Creates a new account. Initial balance is always `0`. Setting initial balance is
   ```
 - **Example cURL**:
   ```bash
-  curl -X POST http://localhost:3000/api/v1/accounts \
+  curl -X POST http://localhost:5000/api/v1/accounts \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer <your_jwt_token>" \
     -d '{"name": "Alice Smith"}'
@@ -426,20 +426,6 @@ Atomically transfers funds from a source account to a destination account.
 
 ---
 
-#### 7. Health Check
-- **URL**: `GET /api/v1/health` (Public)
-- **Response** (`200 OK`):
-  ```json
-  {
-    "status": "healthy",
-    "timestamp": "2026-10-28T21:20:00.000Z",
-    "uptime": 45.2,
-    "acid_transactions_enabled": true
-  }
-  ```
-
----
-
 ## Automated Testing & Coverage
 
 The test suite contains **49 automated unit and integration tests** verifying authentication, error responses, ACID atomicity, and edge cases:
@@ -461,7 +447,7 @@ npm run test:coverage
 - `tests/transactionHistory.test.js`: Filtering, pagination, sorting (latest first), not-found behavior.
 - `tests/dataIntegrity.test.js`: Multi-step consistency example (`0 + 100 + 50 - 30 - 20 = 100`), transaction immutability hooks.
 - `tests/transfers.test.js`: Bonus P2P transfer, atomic rollback on failure, duplicate rejection, same-account prevention.
-- `tests/health.test.js`: Root, health, and 404 route handling.
+- Status and 404 route handling.
 
 ---
 
